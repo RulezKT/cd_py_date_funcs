@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "cd-py-date-funcs"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+cd-py-consts = {git = "https://github.com/RulezKT/cd_py_consts.git"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
