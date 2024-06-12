@@ -3,14 +3,21 @@ import math
 from cd_py_consts import JD2000, SEC_IN_1_DAY
 
 
-def gregorian_date_to_sec_from_j2000(year, month, day, hour, minutes, seconds):
+def greg_to_sec_from_j2000(gregDate):
     """
     int year, int month, int day, int hour, int minutes, int seconds
 
 
+
     https://ru.wikipedia.org/wiki/%D0%AE%D0%BB%D0%B8%D0%B0%D0%BD%D1%81%D0%BA%D0%B0%D1%8F_%D0%B4%D0%B0%D1%82%D0%B0
     """
-    JD2000 = 2451545.0  # 12:00 UT on January 1, 2000
+
+    year = gregDate["year"]
+    month = gregDate["month"]
+    day = gregDate["day"]
+    hours = gregDate["hours"]
+    minutes = gregDate["minutes"]
+    seconds = gregDate["seconds"]
 
     """
     You must compute first the number of years (y) and months (m) 
@@ -19,9 +26,9 @@ def gregorian_date_to_sec_from_j2000(year, month, day, hour, minutes, seconds):
     """
     a = math.floor((14 - month) / 12)
     # print("a={}\n".format(a))
-    y = year + 4800 - a
+    y = math.floor(year + 4800 - a)
     # print("y={}\n".format(y))
-    m = month + 12 * a - 3
+    m = math.floor(month + 12 * a - 3)
     # print("m={}\n".format(m))
 
     """
@@ -41,19 +48,22 @@ def gregorian_date_to_sec_from_j2000(year, month, day, hour, minutes, seconds):
         - 32045
     )
 
+    # переводим в секунды от JD200 часы минуты и секунды пока не учтены
+    date_in_sec = math.floor((jdn - JD2000) * SEC_IN_1_DAY)
     # temp_jdn = jdn
     # temp_hour = hour
 
     # теперь отталкиваясь от полдня корректируемся на часы минуты и секунды
-    if hour < 12:
+    if hours < 12:
         jdn -= 0.5
     else:
-        hour -= 12
+        hours -= 12
 
-    jdn += (hour * 60 * 60 + minutes * 60 + seconds) / 86400.0
+    jdn += (hours * 60 * 60 + minutes * 60 + seconds) / 86400.0
     # print("\nJulian Day = {}".format(jdn))
 
-    date_in_sec = (jdn - JD2000) * 86400
+    # date_in_sec = (jdn - JD2000) * 86400
+    date_in_sec += math.floor(hours * 60 * 60 + minutes * 60 + seconds)
     # print("date in seconds = {}\n".format(date_in_sec))
 
     # date_in_sec1 = (temp_jdn - JD2000) * 86400
@@ -66,7 +76,204 @@ def gregorian_date_to_sec_from_j2000(year, month, day, hour, minutes, seconds):
     return date_in_sec
 
 
-def gregorian_date_to_jd(year, month, day, hour, minutes, seconds):
+# отличная версия калькуляции, получаем Грег. дату в ET
+# sec jd2000 to_greg_meeus
+# V 2024
+def sec_to_greg_meeus(sec_from_jd2000):
+    # JD2000 = 2451545.0  # 12:00 UT on January 1, 2000
+    # получаем Julian Day
+    jdn = JD2000 + sec_from_jd2000 / SEC_IN_1_DAY
+
+    jdn += 0.5
+
+    A = None
+
+    Z = math.trunc(jdn)
+
+    F = jdn - Z
+
+    if Z < 2299161:
+        A = Z
+    else:
+        alpha = math.trunc((Z - 1867216.25) / 36524.25)
+        A = Z + 1 + alpha - math.trunc(alpha / 4)
+
+    B = math.trunc(A + 1524)
+
+    C = math.trunc((B - 122.1) / 365.25)
+
+    D = math.trunc(365.25 * C)
+
+    E = math.trunc((B - D) / 30.6001)
+
+    day = B - D - math.trunc(30.6001 * E) + F
+
+    month = None
+
+    if E < 0 or E > 15:
+        print("sec_jd2000_to_greg_meeus, unacceptable value of E")
+        raise ValueError
+
+    if E < 14:
+        month = E - 1
+    else:
+        month = E - 13
+
+    year = C - 4716 if month > 2 else C - 4715
+
+    hour = (day - math.trunc(day)) * 24
+
+    day = math.trunc(day)
+
+    minute = (hour - math.trunc(hour)) * 60
+
+    hour = math.trunc(hour)
+
+    second = (minute - math.trunc(minute)) * 60
+
+    minute = math.trunc(minute)
+
+    second = math.trunc(second)
+
+    return year, month, day, hour, minute, second
+
+
+def __greg_date_to_JD_fliegel(year, month, day, hour, minutes, seconds):
+    return (
+        367 * year
+        - (7 * (year + 5001 + (month - 9) / 7)) / 4
+        + (275 * month) / 9
+        + day
+        + 1729777
+        + (hour + minutes / 60 + seconds / 3600) / 24
+    )
+
+
+def __JD_to_greg_fliegel(JD):
+    """
+    Convert Julian Day to Gregorian date using Fliegel-Van Flandern algorithm.
+    """
+    JD = JD + 0.5
+    Z = math.trunc(JD)
+    F = JD - Z
+    A = Z
+    if Z >= 2299161:
+        alpha = math.trunc((Z - 1867216.25) / 36524.25)
+        A = Z + 1 + alpha - math.trunc(alpha / 4)
+    B = A + 1524
+    C = math.trunc((B - 122.1) / 365.25)
+    D = math.trunc(365.25 * C)
+    E = math.trunc((B - D) / 30.6001)
+    day = B - D - math.trunc(30.6001 * E) + F
+    month = E - 1 if E < 14 else E - 13
+    year = C - 4716 if month > 2 else C - 4715
+    hour = (day - math.trunc(day)) * 24
+    day = math.trunc(day)
+    minute = (hour - math.trunc(hour)) * 60
+    hour = math.trunc(hour)
+    second = (minute - math.trunc(minute)) * 60
+    minute = math.trunc(minute)
+    second = math.ceil(second)
+    return year, month, day, hour, minute, second
+
+
+def __gregorian_to_julian_day(year, month, day):
+    """
+    Convert a Gregorian date to Julian Day using the Fliegel algorithm.
+    """
+    a = (14 - month) // 12
+    y = year + 4800 - a
+    m = month + 12 * a - 3
+
+    # Calculate Julian Day
+    julian_day = (
+        day + ((153 * m + 2) // 5) + 365 * y + y // 4 - y // 100 + y // 400 - 32045
+    )
+
+    return julian_day
+
+
+def __gregorian_date_to_julian_day_with_time(year, month, day, hour, minutes, seconds):
+    """
+    Convert a Gregorian date to Julian Day with time using the Fliegel algorithm.
+    """
+    a = (14 - month) // 12
+    y = year + 4800 - a
+    m = month + 12 * a - 3
+
+    # Calculate Julian Day
+    julian_day = (
+        day + ((153 * m + 2) // 5) + 365 * y + y // 4 - y // 100 + y // 400 - 32045
+    )
+
+    # Add time
+    julian_day += (hour + minutes / 60 + seconds / 3600) / 24
+
+    return julian_day
+
+
+def __gregorian_to_JD_gpt(year, month, day):
+    """
+        Convert a Gregorian calendar date to Julian Day.
+
+        :param year: Year
+        :param month: Month
+        :param day: Day
+        :return: Julian Day
+
+
+
+
+
+    JD=⌊365.25×(year+4716)⌋+⌊30.6001×(month+1)⌋+day+B−1524.5
+
+    Where B is a correction term to account for the change from Julian to Gregorian calendar.
+
+    This algorithm works well for dates after 1582, when the Gregorian calendar was adopted.
+    For dates before 1582, you may need to adjust the algorithm to account for the transition from the Julian to the Gregorian calendar.
+    """
+    if month <= 2:
+        year -= 1
+        month += 12
+
+    A = year // 100
+    B = 2 - A + (A // 4)
+
+    jd = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + B - 1524.5
+
+    return jd
+
+
+def __greg_to_JD_with_time(year, month, day, hour, minute, second):
+    """
+    Convert a Gregorian calendar date and time to Julian Day.
+
+    :param year: Year
+    :param month: Month
+    :param day: Day
+    :param hour: Hour
+    :param minute: Minute
+    :param second: Second
+    :return: Julian Day
+    """
+    if month <= 2:
+        year -= 1
+        month += 12
+
+    A = year // 100
+    B = 2 - A + (A // 4)
+
+    jd = (
+        (int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + B - 1524.5)
+        + (hour - 12) / 24
+        + minute / 1440
+        + second / 86400
+    )
+
+    return jd
+
+
+def __gregorian_date_to_jd(year, month, day, hour, minutes, seconds):
     """
     int year, int month, int day, int hour, int minutes, int seconds
 
@@ -125,203 +332,9 @@ def gregorian_date_to_jd(year, month, day, hour, minutes, seconds):
 # used in find_eps formula
 # https://radixpro.com/a4a-start/factor-t-and-delta-t/
 # https://radixpro.com/a4a-start/obliquity/
-def factor_t(sec_from_jd2000):
+def __factor_t(sec_from_jd2000):
     jdn = JD2000 + sec_from_jd2000 / SEC_IN_1_DAY
     return (jdn - JD2000) / 36525
-
-
-# отличная версия калькуляции, получаем Грег. дату в ET
-def sec_jd2000_to_greg_meeus(sec_from_jd2000):
-    # получаем Julian Day
-    jdn = JD2000 + sec_from_jd2000 / SEC_IN_1_DAY
-
-    jdn += 0.5
-
-    A = None
-
-    Z = math.trunc(jdn)
-
-    F = jdn - Z
-
-    if Z < 2299161:
-        A = Z
-    else:
-        alpha = math.trunc((Z - 1867216.25) / 36524.25)
-        A = Z + 1 + alpha - math.trunc(alpha / 4)
-
-    B = A + 1524
-
-    C = math.trunc((B - 122.1) / 365.25)
-
-    D = math.trunc(365.25 * C)
-
-    E = math.trunc((B - D) / 30.6001)
-
-    day = B - D - math.trunc(30.6001 * E) + F
-
-    month = None
-
-    if E < 0 or E > 15:
-        print("sec_jd2000_to_greg_meeus, unacceptable value of E")
-        raise ValueError
-
-    if E < 14:
-        month = E - 1
-    else:
-        month = E - 13
-
-    year = C - 4716 if month > 2 else C - 4715
-
-    hour = (day - math.trunc(day)) * 24
-
-    day = math.trunc(day)
-
-    minute = (hour - math.trunc(hour)) * 60
-
-    hour = math.trunc(hour)
-
-    second = (minute - math.trunc(minute)) * 60
-
-    minute = math.trunc(minute)
-
-    second = math.ceil(second)
-
-    return year, month, day, hour, minute, second
-
-
-def greg_date_to_JD_fliegel(year, month, day, hour, minutes, seconds):
-    return (
-        367 * year
-        - (7 * (year + 5001 + (month - 9) / 7)) / 4
-        + (275 * month) / 9
-        + day
-        + 1729777
-        + (hour + minutes / 60 + seconds / 3600) / 24
-    )
-
-
-def JD_to_greg_fliegel(JD):
-    """
-    Convert Julian Day to Gregorian date using Fliegel-Van Flandern algorithm.
-    """
-    JD = JD + 0.5
-    Z = math.trunc(JD)
-    F = JD - Z
-    A = Z
-    if Z >= 2299161:
-        alpha = math.trunc((Z - 1867216.25) / 36524.25)
-        A = Z + 1 + alpha - math.trunc(alpha / 4)
-    B = A + 1524
-    C = math.trunc((B - 122.1) / 365.25)
-    D = math.trunc(365.25 * C)
-    E = math.trunc((B - D) / 30.6001)
-    day = B - D - math.trunc(30.6001 * E) + F
-    month = E - 1 if E < 14 else E - 13
-    year = C - 4716 if month > 2 else C - 4715
-    hour = (day - math.trunc(day)) * 24
-    day = math.trunc(day)
-    minute = (hour - math.trunc(hour)) * 60
-    hour = math.trunc(hour)
-    second = (minute - math.trunc(minute)) * 60
-    minute = math.trunc(minute)
-    second = math.ceil(second)
-    return year, month, day, hour, minute, second
-
-
-def gregorian_to_julian_day(year, month, day):
-    """
-    Convert a Gregorian date to Julian Day using the Fliegel algorithm.
-    """
-    a = (14 - month) // 12
-    y = year + 4800 - a
-    m = month + 12 * a - 3
-
-    # Calculate Julian Day
-    julian_day = (
-        day + ((153 * m + 2) // 5) + 365 * y + y // 4 - y // 100 + y // 400 - 32045
-    )
-
-    return julian_day
-
-
-def gregorian_date_to_julian_day_with_time(year, month, day, hour, minutes, seconds):
-    """
-    Convert a Gregorian date to Julian Day with time using the Fliegel algorithm.
-    """
-    a = (14 - month) // 12
-    y = year + 4800 - a
-    m = month + 12 * a - 3
-
-    # Calculate Julian Day
-    julian_day = (
-        day + ((153 * m + 2) // 5) + 365 * y + y // 4 - y // 100 + y // 400 - 32045
-    )
-
-    # Add time
-    julian_day += (hour + minutes / 60 + seconds / 3600) / 24
-
-    return julian_day
-
-
-def gregorian_to_JD_gpt(year, month, day):
-    """
-        Convert a Gregorian calendar date to Julian Day.
-
-        :param year: Year
-        :param month: Month
-        :param day: Day
-        :return: Julian Day
-
-
-
-
-
-    JD=⌊365.25×(year+4716)⌋+⌊30.6001×(month+1)⌋+day+B−1524.5
-
-    Where B is a correction term to account for the change from Julian to Gregorian calendar.
-
-    This algorithm works well for dates after 1582, when the Gregorian calendar was adopted.
-    For dates before 1582, you may need to adjust the algorithm to account for the transition from the Julian to the Gregorian calendar.
-    """
-    if month <= 2:
-        year -= 1
-        month += 12
-
-    A = year // 100
-    B = 2 - A + (A // 4)
-
-    jd = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + B - 1524.5
-
-    return jd
-
-
-def greg_to_JD_with_time(year, month, day, hour, minute, second):
-    """
-    Convert a Gregorian calendar date and time to Julian Day.
-
-    :param year: Year
-    :param month: Month
-    :param day: Day
-    :param hour: Hour
-    :param minute: Minute
-    :param second: Second
-    :return: Julian Day
-    """
-    if month <= 2:
-        year -= 1
-        month += 12
-
-    A = year // 100
-    B = 2 - A + (A // 4)
-
-    jd = (
-        (int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + B - 1524.5)
-        + (hour - 12) / 24
-        + minute / 1440
-        + second / 86400
-    )
-
-    return jd
 
 
 """	
@@ -432,7 +445,7 @@ full_delta_t_table = [
 """
 
 
-def calculate_delta_t(year):
+def __calculate_delta_t(year):
     delta_t_sec = None
 
     # before year 1620 (observations started from 1620, before were only estimations)
@@ -586,7 +599,7 @@ def get_delta_t(year):
     first_year = full_delta_t_table[0][0]
     last_year = full_delta_t_table[-1][0]
     if year < first_year or year > last_year:
-        return calculate_delta_t(year)
+        return __calculate_delta_t(year)
 
     return full_delta_t_table[year - first_year][1]
 
@@ -628,7 +641,7 @@ if __name__ == "__main__":
     #    print(sec_jd2000_to_greg_meeus(86400 * 365 * 4))
 
     #    print(gregorian_date_to_sec_from_j2000(1978, 5, 17, 12, 47, 17))
-    jd = greg_date_to_JD_fliegel(1978, 5, 17, 12, 47, 17)  # 2443646.032836
+    jd = __greg_date_to_JD_fliegel(1978, 5, 17, 12, 47, 17)  # 2443646.032836
     print(jd)
 
     # Example usage
@@ -636,7 +649,7 @@ if __name__ == "__main__":
     month = 5
     day = 17
 
-    julian_day = gregorian_date_to_julian_day_with_time(year, month, day, 12, 47, 17)
+    julian_day = __gregorian_date_to_julian_day_with_time(year, month, day, 12, 47, 17)
     print(f"The Julian Day for {year}-{month}-{day} is {julian_day}")
 
     # Example usage
@@ -647,15 +660,24 @@ if __name__ == "__main__":
     minute = 30
     second = 45
 
-    jd = greg_to_JD_with_time(1978, 5, 17, 12, 47, 17)
+    jd = __greg_to_JD_with_time(1978, 5, 17, 12, 47, 17)
     print("Julian Day:", jd)
 
-    jd = gregorian_date_to_jd(1978, 5, 17, 12, 47, 17)
+    jd = __gregorian_date_to_jd(1978, 5, 17, 12, 47, 17)
     print(f" Julian Day = {jd}")
 
-    jd = gregorian_date_to_sec_from_j2000(1978, 5, 17, 12, 47, 17)
+    jd = greg_to_sec_from_j2000(
+        {
+            "year": 1978,
+            "month": 5,
+            "day": 17,
+            "hours": 12,
+            "minutes": 47,
+            "seconds": 17,
+        }
+    )
     print(f" Seconds = {jd}")
-    jd = sec_jd2000_to_greg_meeus(jd)
+    jd = sec_to_greg_meeus(jd)
     print(f" Gregorian date = {jd}")
     print(get_delta_t(1800))
     print(get_delta_t(1978))
