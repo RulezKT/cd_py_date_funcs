@@ -76,6 +76,18 @@ def greg_to_sec_from_j2000(gregDate):
     return date_in_sec
 
 
+def sec_to_greg(sec_from_jd2000):
+    greg_time = sec_to_greg_meeus(sec_from_jd2000)
+    return {
+        "year": greg_time[0],
+        "month": greg_time[1],
+        "day": greg_time[2],
+        "hours": greg_time[3],
+        "minutes": greg_time[4],
+        "seconds": greg_time[5],
+    }
+
+
 # отличная версия калькуляции, получаем Грег. дату в ET
 # sec jd2000 to_greg_meeus
 # V 2024
